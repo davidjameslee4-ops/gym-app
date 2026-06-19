@@ -314,7 +314,7 @@ export default function SettingsScreen() {
         {/* App Info */}
         <View style={[styles.appInfo, { borderTopColor: colors.border }]}>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>
-            Avner&apos;s Gym Tracker v1.0.0
+            Gym Workout Tracker v1.0.0
           </Text>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>
             All data is stored locally on your device
