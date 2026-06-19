@@ -1,0 +1,72 @@
+{
+  "summary": "Comprehensive UI/integration testing of Avner's Gym Tracker (Expo web). All 7 tabs load, navigation works, default 7-day program loads, schedule expand/collapse + edit/delete + add exercise modal + program chips work, timer (stopwatch + countdown + presets) works, history calendar shows current month, progress stats + nutrition calculator modal open, profile edit toggle works, settings dark mode and weight unit selector work, data persists via localStorage. Found and FIXED a CRITICAL day-of-week mapping bug on Home screen where today's workout was off by one day (e.g., Friday showed Saturday's workout). Minor cosmetic 'reps' suffix issue noted for time/duration based exercises. Most tab screens are missing testID attributes for robust automated testing.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Home screen - Today's Workout",
+        "issue": "CRITICAL (now fixed by testing agent): Day index used `new Date().getDay()` directly (Sun=0..Sat=6) to index the days array which starts on Monday (index 0). Result: every day was off by one. E.g., on Friday it displayed 'Saturday - Heavy Pull + Heavy Biceps + Abs'. Fixed to `(getDay()+6)%7`. Reference: /app/frontend/app/(tabs)/index.tsx:78-82",
+        "testID": "complete-workout-button (area)",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "Exercise rendering (Home + Schedule)",
+        "issue": "Cosmetic: appends 'reps' to every reps value even when value contains a time unit. Renders 'Treadmill Walk: 1 sets × 15-20 min reps', 'Stretching: 1 sets × 10 min reps', 'Plank: 3 sets × 30-60 sec reps'. Strip 'reps' suffix when reps string contains 'min', 'sec', or 'min'. Reference: /app/frontend/app/(tabs)/index.tsx:245-248 and /app/frontend/app/(tabs)/schedule.tsx:319-322",
+        "testID": "n/a",
+        "priority": "LOW"
+      },
+      {
+        "component": "Bottom tab labels",
+        "issue": "On 390px viewport, tab labels at bottom are slightly cropped/truncated under icons. Consider reducing fontSize from 11 to 10 or hiding labels on small widths. Reference: /app/frontend/app/(tabs)/_layout.tsx:24-27",
+        "testID": "n/a",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Profile edit toggle",
+        "issues": ["Edit/Save button is icon-only (pencil → checkmark). Discoverability is OK but no text label or aria-label; could be confusing. Consider adding a textual label or accessibilityLabel."]
+      }
+    ],
+    "react_native_issues": [
+      {
+        "component": "expo-image-picker / camera (used in profile.tsx)",
+        "issue": "Profile picture pick/take photo uses expo-image-picker — fine on native, but on web preview camera/gallery flows may not work as expected. Not blocking. Reference: /app/frontend/app/(tabs)/profile.tsx"
+      },
+      {
+        "component": "Missing testID coverage",
+        "issue": "Only Home's complete-workout button has testID. All other interactive elements across schedule/timer/history/progress/profile/settings (program chips, day rows, add-exercise modal inputs, stopwatch start/pause/reset, countdown duration input, nutrition modal inputs, edit toggle, theme toggle, weight unit selector) lack testID, making future automated regression tests fragile."
+      },
+      {
+        "component": "props.pointerEvents deprecation warning",
+        "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Likely from a dependency (react-native-web/Pressable usage). Non-blocking but should be tracked. Reference: console output of expo web build."
+      },
+      {
+        "component": "Image style.tintColor deprecation",
+        "issue": "Console warning: 'Image: style.tintColor is deprecated. Please use props.tintColor.' Appears when navigating to History. Non-blocking."
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Verify the day-of-week fix applied by tester at /app/frontend/app/(tabs)/index.tsx (line 78-82). Apply the same logic anywhere else date->day index is used.",
+    "Fix cosmetic 'reps' suffix: do not append ' reps' when exercise.reps contains 'min' or 'sec' (Home + Schedule render strings).",
+    "Add testID props to all interactive elements per the unit-testing requirement (program chips, day rows, add/edit modal inputs, timer Start/Pause/Reset, countdown duration input + presets, nutrition modal inputs and Calculate button, profile edit button, settings dark-mode switch and weight unit chips).",
+    "Consider reducing tabBarLabel fontSize to 10 or shortening labels on small screens to prevent truncation."
+  ],
+  "critical_code_review_comments": [
+    "Day index mapping bug in /app/frontend/app/(tabs)/index.tsx using getDay() directly against a Monday-first array — fixed.",
+    "Most TouchableOpacity/Pressable components lack testID attributes — limits regression testing.",
+    "useFocusEffect + useEffect both call loadData() on mount (duplicate first load). Not a bug, but a small redundancy in index.tsx, schedule.tsx, etc."
+  ],
+  "updated_files": [
+    "/app/frontend/app/(tabs)/index.tsx (fixed day-of-week index mapping)"
+  ],
+  "success_rate": { "backend": "N/A (frontend-only testing)", "frontend": "~95% (all flows functional after day-mapping fix; minor cosmetic and accessibility items remain)" },
+  "seed_data_creation": "None. App auto-seeds DEFAULT_WORKOUT_PROGRAM on first run via localStorage when no workoutPrograms key exists. Verified by clearing localStorage and reloading.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "App is Expo web preview at https://workout-logger-pro-25.preview.emergentagent.com. Browser timezone is UTC. Day-of-week mapping uses (getDay()+6)%7 because days[] starts at Monday. Most non-Home screens lack testID — selectors must rely on get_by_text. To re-seed data, clear localStorage and reload. The Nutrition Calculator opens via Progress > '+' button (top-right of Progress header), not a 'Nutrition Calculator' labeled button — it is accessed via the plus icon and renders a full modal titled 'Nutrition Calculator'.",
+  "rca_of_issue": "Root cause of Home incorrect-day bug: JavaScript Date.getDay() returns Sunday=0..Saturday=6, but DEFAULT_WORKOUT_PROGRAM.days array is ordered [Mon, Tue, Wed, Thu, Fri, Sat, Sun] (Monday at index 0). Indexing days[getDay()] therefore produces an off-by-one mapping (Friday's getDay()=5 returned days[5]=Saturday). Mitigation: convert to Monday-first index via const dayIndex = (new Date().getDay() + 6) % 7. Verified after fix: on Friday UTC, Home now correctly displays 'Friday - Active Recovery' with the five Friday exercises."
+}
