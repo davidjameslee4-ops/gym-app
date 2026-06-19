@@ -230,6 +230,7 @@ export default function ScheduleScreen() {
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
         <Text style={[styles.headerTitle, { color: colors.text }]}>Schedule</Text>
         <TouchableOpacity
+          testID="schedule-add-program-button"
           style={[styles.addButton, { backgroundColor: colors.primary }]}
           onPress={() => setShowProgramModal(true)}
         >
@@ -317,7 +318,7 @@ export default function ScheduleScreen() {
                       <Text style={[styles.exerciseNameText, { color: colors.text }]}>{exercise.name}</Text>
                     </View>
                     <Text style={[styles.exerciseDetails, { color: colors.textSecondary }]}>
-                      {exercise.sets} sets × {exercise.reps} reps
+                      {exercise.sets} sets × {exercise.reps}{/min|sec/i.test(exercise.reps) ? '' : ' reps'}
                       {exercise.weight && ` @ ${exercise.weight}kg`}
                     </Text>
                     {exercise.notes && (

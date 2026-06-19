@@ -245,7 +245,7 @@ export default function HomeScreen() {
                     {exercise.name}
                   </Text>
                   <Text style={[styles.exerciseStats, { color: colors.textSecondary }]}>
-                    {exercise.sets} sets × {exercise.reps} reps
+                    {exercise.sets} sets × {exercise.reps}{/min|sec/i.test(exercise.reps) ? '' : ' reps'}
                     {exercise.weight ? ` @ ${exercise.weight}${profile?.weightUnit || 'kg'}` : ''}
                   </Text>
                 </View>
