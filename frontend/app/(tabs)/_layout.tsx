@@ -2,10 +2,15 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '@/src/contexts/ThemeContext';
-import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 function TabLayout() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // Pad the tab bar by the bottom inset so it sits above the device nav bar / home indicator
+  const tabBarPaddingBottom = Math.max(insets.bottom, 8);
+  const tabBarHeight = 60 + tabBarPaddingBottom;
 
   return (
     <Tabs
@@ -17,8 +22,8 @@ function TabLayout() {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 88 : 60,
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+          height: tabBarHeight,
+          paddingBottom: tabBarPaddingBottom,
           paddingTop: 8,
         },
         tabBarLabelStyle: {
