@@ -81,3 +81,9 @@ memory/test_credentials.md
 # Mobile development
 android-sdk/gym-app-source.zip
 gym-app-source.zip
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials
