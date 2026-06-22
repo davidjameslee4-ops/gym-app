@@ -26,6 +26,8 @@ export default function ScheduleScreen() {
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [selectedDay, setSelectedDay] = useState<WorkoutDay | null>(null);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
+  const [editingFocusDayId, setEditingFocusDayId] = useState<string | null>(null);
+  const [focusInput, setFocusInput] = useState('');
   
   // Form states
   const [programName, setProgramName] = useState('');
@@ -224,6 +226,38 @@ export default function ScheduleScreen() {
     setShowExerciseModal(true);
   };
 
+  const startEditingFocus = (day: WorkoutDay) => {
+    setEditingFocusDayId(day.id);
+    setFocusInput(day.focus || '');
+  };
+
+  const cancelEditingFocus = () => {
+    setEditingFocusDayId(null);
+    setFocusInput('');
+  };
+
+  const saveFocus = async (dayId: string) => {
+    const trimmed = focusInput.trim();
+    if (!trimmed) {
+      Alert.alert('Invalid Input', 'Muscle groups cannot be empty. Enter a value or cancel.');
+      return;
+    }
+
+    const updatedPrograms = programs.map(p => {
+      if (p.id === activeProgram?.id) {
+        return {
+          ...p,
+          days: p.days.map(d => (d.id === dayId ? { ...d, focus: trimmed } : d)),
+        };
+      }
+      return p;
+    });
+
+    await savePrograms(updatedPrograms);
+    setEditingFocusDayId(null);
+    setFocusInput('');
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -286,27 +320,90 @@ export default function ScheduleScreen() {
           <View key={day.id} style={[styles.dayCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <TouchableOpacity
               style={styles.dayHeader}
-              onPress={() => setExpandedDay(expandedDay === day.id ? null : day.id)}
+              onPress={() => editingFocusDayId === day.id ? undefined : setExpandedDay(expandedDay === day.id ? null : day.id)}
+              activeOpacity={editingFocusDayId === day.id ? 1 : 0.7}
             >
               <View style={styles.dayHeaderLeft}>
                 <View style={[styles.dayNumber, { backgroundColor: colors.primary }]}>
                   <Text style={styles.dayNumberText}>{index + 1}</Text>
                 </View>
-                <View>
+                <View style={styles.dayHeaderTextWrap}>
                   <Text style={[styles.dayName, { color: colors.text }]}>{day.name}</Text>
-                  <Text style={[styles.dayFocus, { color: colors.textSecondary }]}>{day.focus}</Text>
+                  {editingFocusDayId === day.id ? (
+                    <View style={styles.focusEditRow}>
+                      <TextInput
+                        testID={`focus-input-${day.id}`}
+                        style={[
+                          styles.focusInput,
+                          {
+                            backgroundColor: colors.background,
+                            color: colors.text,
+                            borderColor: colors.primary,
+                          },
+                        ]}
+                        value={focusInput}
+                        onChangeText={setFocusInput}
+                        placeholder="e.g., Chest + Triceps"
+                        placeholderTextColor={colors.textSecondary}
+                        autoFocus
+                        onSubmitEditing={() => saveFocus(day.id)}
+                        returnKeyType="done"
+                      />
+                      <TouchableOpacity
+                        testID={`focus-save-${day.id}`}
+                        style={[styles.focusIconButton, { backgroundColor: colors.success }]}
+                        onPress={() => saveFocus(day.id)}
+                      >
+                        <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        testID={`focus-cancel-${day.id}`}
+                        style={[styles.focusIconButton, { backgroundColor: colors.error }]}
+                        onPress={cancelEditingFocus}
+                      >
+                        <Ionicons name="close" size={18} color="#FFFFFF" />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      testID={`focus-edit-${day.id}`}
+                      style={styles.focusDisplayRow}
+                      onPress={() => startEditingFocus(day)}
+                      activeOpacity={0.6}
+                    >
+                      <Text
+                        style={[
+                          styles.dayFocus,
+                          {
+                            color: day.focus ? colors.textSecondary : colors.textSecondary,
+                            fontStyle: day.focus ? 'normal' : 'italic',
+                          },
+                        ]}
+                      >
+                        {day.focus || 'No muscle groups assigned'}
+                      </Text>
+                      <Ionicons
+                        name="pencil"
+                        size={14}
+                        color={colors.primary}
+                        style={styles.focusEditIcon}
+                      />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-              <View style={styles.dayHeaderRight}>
-                <Text style={[styles.exerciseCount, { color: colors.textSecondary }]}>
-                  {day.exercises.length} exercises
-                </Text>
-                <Ionicons
-                  name={expandedDay === day.id ? 'chevron-up' : 'chevron-down'}
-                  size={24}
-                  color={colors.textSecondary}
-                />
-              </View>
+              {editingFocusDayId !== day.id && (
+                <View style={styles.dayHeaderRight}>
+                  <Text style={[styles.exerciseCount, { color: colors.textSecondary }]}>
+                    {day.exercises.length} exercises
+                  </Text>
+                  <Ionicons
+                    name={expandedDay === day.id ? 'chevron-up' : 'chevron-down'}
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </View>
+              )}
             </TouchableOpacity>
 
             {expandedDay === day.id && (
@@ -545,9 +642,44 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  dayHeaderTextWrap: {
+    flex: 1,
+  },
   dayFocus: {
     fontSize: 13,
     marginTop: 2,
+  },
+  focusDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingVertical: 4,
+    gap: 6,
+  },
+  focusEditIcon: {
+    opacity: 0.8,
+  },
+  focusEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 6,
+  },
+  focusInput: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 13,
+    minWidth: 0,
+  },
+  focusIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dayHeaderRight: {
     flexDirection: 'row',
