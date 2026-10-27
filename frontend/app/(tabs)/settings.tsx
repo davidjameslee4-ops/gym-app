@@ -10,12 +10,12 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/src/contexts/ThemeContext';
+import { useTheme, ACCENT_COLORS } from '@/src/contexts/ThemeContext';
 import { storage } from '@/src/utils/storage';
 import { UserProfile } from '@/src/types/workout';
 
 export default function SettingsScreen() {
-  const { colors, theme, toggleTheme } = useTheme();
+  const { colors, theme, toggleTheme, accentColor, setAccentColor } = useTheme();
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
 
   useEffect(() => {
@@ -182,6 +182,38 @@ export default function SettingsScreen() {
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor="#FFFFFF"
               />
+            </View>
+          </View>
+          <View style={[styles.settingCard, styles.accentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="color-palette" size={24} color={colors.text} />
+              <View style={styles.settingText}>
+                <Text style={[styles.settingTitle, { color: colors.text }]}>App Colour</Text>
+                <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
+                  {ACCENT_COLORS.find(c => c.key === accentColor)?.label}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.swatchRow}>
+              {ACCENT_COLORS.map(c => {
+                const selected = c.key === accentColor;
+                return (
+                  <TouchableOpacity
+                    key={c.key}
+                    testID={`accent-${c.key}`}
+                    accessibilityLabel={`${c.label} colour`}
+                    onPress={() => setAccentColor(c.key)}
+                    style={[
+                      styles.swatchOuter,
+                      { borderColor: selected ? colors.text : 'transparent' },
+                    ]}
+                  >
+                    <View style={[styles.swatch, { backgroundColor: c.value }]}>
+                      {selected && <Ionicons name="checkmark" size={20} color="#FFFFFF" />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         </View>
@@ -384,6 +416,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 12,
+  },
+  accentCard: {
+    marginTop: 0,
+  },
+  swatchRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 14,
+  },
+  swatchOuter: {
+    borderWidth: 2,
+    borderRadius: 24,
+    padding: 3,
+  },
+  swatch: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   unitButtons: {
     gap: 8,

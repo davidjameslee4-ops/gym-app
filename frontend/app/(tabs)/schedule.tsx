@@ -16,6 +16,7 @@ import { storage } from '@/src/utils/storage';
 import { WorkoutProgram, WorkoutDay, Exercise } from '@/src/types/workout';
 import { DEFAULT_WORKOUT_PROGRAM } from '@/src/constants/defaultWorkout';
 import { useFocusEffect } from 'expo-router';
+import ExercisePicker from '@/src/components/ExercisePicker';
 
 export default function ScheduleScreen() {
   const { colors } = useTheme();
@@ -28,6 +29,8 @@ export default function ScheduleScreen() {
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [editingFocusDayId, setEditingFocusDayId] = useState<string | null>(null);
   const [focusInput, setFocusInput] = useState('');
+  // Exercise currently selected for reordering (tap an exercise to select it)
+  const [movingExerciseId, setMovingExerciseId] = useState<string | null>(null);
   
   // Form states
   const [programName, setProgramName] = useState('');
@@ -203,6 +206,32 @@ export default function ScheduleScreen() {
         },
       ]
     );
+  };
+
+  const handleMoveExercise = async (dayId: string, exerciseId: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
+    const updatedPrograms = programs.map(p => {
+      if (p.id !== activeProgram?.id) return p;
+      return {
+        ...p,
+        days: p.days.map(d => {
+          if (d.id !== dayId) return d;
+          const from = d.exercises.findIndex(e => e.id === exerciseId);
+          if (from === -1) return d;
+          const last = d.exercises.length - 1;
+          let to = from;
+          if (direction === 'up') to = Math.max(0, from - 1);
+          if (direction === 'down') to = Math.min(last, from + 1);
+          if (direction === 'top') to = 0;
+          if (direction === 'bottom') to = last;
+          if (to === from) return d;
+          const exercises = [...d.exercises];
+          const [moved] = exercises.splice(from, 1);
+          exercises.splice(to, 0, moved);
+          return { ...d, exercises };
+        }),
+      };
+    });
+    await savePrograms(updatedPrograms);
   };
 
   const resetExerciseForm = () => {
@@ -408,11 +437,63 @@ export default function ScheduleScreen() {
 
             {expandedDay === day.id && (
               <View style={styles.dayContent}>
-                {day.exercises.map((exercise, idx) => (
-                  <View key={exercise.id} style={[styles.exerciseCard, { borderTopColor: colors.border }]}>
+                {day.exercises.length > 1 && (
+                  <Text style={[styles.reorderHint, { color: colors.textSecondary }]}>
+                    Tap an exercise to move it up or down
+                  </Text>
+                )}
+                {day.exercises.map((exercise, idx) => {
+                  const isMoving = movingExerciseId === exercise.id;
+                  const isFirst = idx === 0;
+                  const isLast = idx === day.exercises.length - 1;
+                  return (
+                  <TouchableOpacity
+                    key={exercise.id}
+                    testID={`exercise-card-${exercise.id}`}
+                    activeOpacity={0.7}
+                    onPress={() => setMovingExerciseId(isMoving ? null : exercise.id)}
+                    style={[
+                      styles.exerciseCard,
+                      { borderTopColor: colors.border },
+                      isMoving && {
+                        borderColor: colors.primary,
+                        backgroundColor: colors.primary + '1A',
+                        ...styles.exerciseCardSelected,
+                      },
+                    ]}
+                  >
                     <View style={styles.exerciseHeader}>
                       <Text style={[styles.exerciseNumber, { color: colors.primary }]}>#{idx + 1}</Text>
                       <Text style={[styles.exerciseNameText, { color: colors.text }]}>{exercise.name}</Text>
+                      {isMoving && (
+                        <View style={styles.moveButtons}>
+                          {([
+                            { dir: 'top', icon: 'play-skip-back', disabled: isFirst, rotate: true },
+                            { dir: 'up', icon: 'arrow-up', disabled: isFirst, rotate: false },
+                            { dir: 'down', icon: 'arrow-down', disabled: isLast, rotate: false },
+                            { dir: 'bottom', icon: 'play-skip-forward', disabled: isLast, rotate: true },
+                          ] as const).map(btn => (
+                            <TouchableOpacity
+                              key={btn.dir}
+                              testID={`move-${btn.dir}-${exercise.id}`}
+                              accessibilityLabel={`Move ${btn.dir}`}
+                              disabled={btn.disabled}
+                              onPress={() => handleMoveExercise(day.id, exercise.id, btn.dir)}
+                              style={[
+                                styles.moveButton,
+                                { backgroundColor: btn.disabled ? colors.border : colors.primary },
+                              ]}
+                            >
+                              <Ionicons
+                                name={btn.icon}
+                                size={18}
+                                color="#FFFFFF"
+                                style={btn.rotate ? { transform: [{ rotate: '90deg' }] } : undefined}
+                              />
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
                     </View>
                     <Text style={[styles.exerciseDetails, { color: colors.textSecondary }]}>
                       {exercise.sets} sets × {exercise.reps}{/min|sec/i.test(exercise.reps) ? '' : ' reps'}
@@ -438,9 +519,20 @@ export default function ScheduleScreen() {
                         <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
                         <Text style={styles.actionButtonText}>Delete</Text>
                       </TouchableOpacity>
+                      {isMoving && (
+                        <TouchableOpacity
+                          testID={`move-done-${exercise.id}`}
+                          style={[styles.actionButton, { backgroundColor: colors.success }]}
+                          onPress={() => setMovingExerciseId(null)}
+                        >
+                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                          <Text style={styles.actionButtonText}>Done</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  </View>
-                ))}
+                  </TouchableOpacity>
+                  );
+                })}
 
                 <TouchableOpacity
                   style={[styles.addExerciseButton, { borderColor: colors.primary }]}
@@ -499,13 +591,7 @@ export default function ScheduleScreen() {
               {editingExercise ? 'Edit Exercise' : 'Add Exercise'}
             </Text>
             <ScrollView>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                placeholder="Exercise Name"
-                placeholderTextColor={colors.textSecondary}
-                value={exerciseName}
-                onChangeText={setExerciseName}
-              />
+              <ExercisePicker value={exerciseName} onChange={setExerciseName} />
               <View style={styles.inputRow}>
                 <TextInput
                   style={[styles.inputHalf, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
@@ -697,6 +783,29 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderTopWidth: 1,
   },
+  exerciseCardSelected: {
+    borderWidth: 2,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    marginVertical: 4,
+  },
+  reorderHint: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    marginBottom: 6,
+  },
+  moveButtons: {
+    flexDirection: 'row',
+    gap: 6,
+    marginLeft: 8,
+  },
+  moveButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -708,6 +817,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   exerciseNameText: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -785,6 +895,7 @@ const styles = StyleSheet.create({
   },
   inputHalf: {
     flex: 1,
+    minWidth: 0,
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,

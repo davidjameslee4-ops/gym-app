@@ -3,9 +3,29 @@ import { storage } from '@/src/utils/storage';
 
 type Theme = 'dark' | 'light';
 
+// Accent colours the user can pick in Settings → Appearance.
+export const ACCENT_COLORS = [
+  { key: 'red', label: 'Red', value: '#DC143C' },
+  { key: 'blue', label: 'Blue', value: '#1E88E5' },
+  { key: 'green', label: 'Green', value: '#2E9E4F' },
+  { key: 'purple', label: 'Purple', value: '#8E44AD' },
+  { key: 'orange', label: 'Orange', value: '#F57C00' },
+  { key: 'pink', label: 'Pink', value: '#E91E8C' },
+  { key: 'teal', label: 'Teal', value: '#00897B' },
+  { key: 'gold', label: 'Gold', value: '#C9A227' },
+] as const;
+
+export type AccentColorKey = typeof ACCENT_COLORS[number]['key'];
+const DEFAULT_ACCENT: AccentColorKey = 'red';
+
+const accentValue = (key: string) =>
+  (ACCENT_COLORS.find(c => c.key === key) ?? ACCENT_COLORS[0]).value;
+
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
+  accentColor: AccentColorKey;
+  setAccentColor: (key: AccentColorKey) => void;
   colors: {
     background: string;
     surface: string;
@@ -47,6 +67,7 @@ const lightColors = {
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<Theme>('dark');
+  const [accentColor, setAccentColorState] = useState<AccentColorKey>(DEFAULT_ACCENT);
 
   useEffect(() => {
     loadTheme();
@@ -55,6 +76,15 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const loadTheme = async () => {
     const savedTheme = await storage.getItem('theme', 'dark') as Theme;
     setTheme(savedTheme);
+    const savedAccent = await storage.getItem('accentColor', DEFAULT_ACCENT) as AccentColorKey;
+    if (ACCENT_COLORS.some(c => c.key === savedAccent)) {
+      setAccentColorState(savedAccent);
+    }
+  };
+
+  const setAccentColor = async (key: AccentColorKey) => {
+    setAccentColorState(key);
+    await storage.setItem('accentColor', key);
   };
 
   const toggleTheme = async () => {
@@ -63,10 +93,13 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     await storage.setItem('theme', newTheme);
   };
 
-  const colors = theme === 'dark' ? darkColors : lightColors;
+  const colors = {
+    ...(theme === 'dark' ? darkColors : lightColors),
+    primary: accentValue(accentColor),
+  };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, colors }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, accentColor, setAccentColor, colors }}>
       {children}
     </ThemeContext.Provider>
   );
