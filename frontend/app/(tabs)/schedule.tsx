@@ -17,6 +17,15 @@ import { WorkoutProgram, WorkoutDay, Exercise } from '@/src/types/workout';
 import { DEFAULT_WORKOUT_PROGRAM } from '@/src/constants/defaultWorkout';
 import { useFocusEffect } from 'expo-router';
 import ExercisePicker from '@/src/components/ExercisePicker';
+import {
+  Completions,
+  completionId,
+  dateKeyForDayIndex,
+  isCompleted,
+  loadCompletions,
+  resetCompletions,
+  toggleCompletion,
+} from '@/src/utils/exerciseCompletion';
 
 export default function ScheduleScreen() {
   const { colors } = useTheme();
@@ -31,6 +40,8 @@ export default function ScheduleScreen() {
   const [focusInput, setFocusInput] = useState('');
   // Exercise currently selected for reordering (tap an exercise to select it)
   const [movingExerciseId, setMovingExerciseId] = useState<string | null>(null);
+  // Exercises ticked off as done, per calendar date
+  const [completions, setCompletions] = useState<Completions>({});
   
   // Form states
   const [programName, setProgramName] = useState('');
@@ -51,6 +62,7 @@ export default function ScheduleScreen() {
   }, []);
 
   const loadPrograms = async () => {
+    loadCompletions().then(setCompletions);
     let savedPrograms = await storage.getItem('workoutPrograms', null) as WorkoutProgram[] | null;
     
     if (!savedPrograms || savedPrograms.length === 0) {
@@ -172,6 +184,19 @@ export default function ScheduleScreen() {
 
     await savePrograms(updatedPrograms);
     resetExerciseForm();
+  };
+
+  const handleToggleDone = async (dayIndex: number, dayId: string, exerciseId: string) => {
+    const updated = await toggleCompletion(dateKeyForDayIndex(dayIndex), completionId(dayId, exerciseId));
+    setCompletions(updated);
+  };
+
+  const handleResetDone = async (dayIndex: number, day: WorkoutDay) => {
+    const updated = await resetCompletions(
+      dateKeyForDayIndex(dayIndex),
+      day.exercises.map(e => completionId(day.id, e.id))
+    );
+    setCompletions(updated);
   };
 
   const handleDeleteExercise = async (dayId: string, exerciseId: string) => {
@@ -345,7 +370,12 @@ export default function ScheduleScreen() {
 
       {/* Workout Days */}
       <ScrollView style={styles.daysContainer}>
-        {activeProgram?.days.map((day, index) => (
+        {activeProgram?.days.map((day, index) => {
+          const dayDate = dateKeyForDayIndex(index);
+          const isDone = (exerciseId: string) => isCompleted(completions, dayDate, completionId(day.id, exerciseId));
+          const doneCount = day.exercises.filter(e => isDone(e.id)).length;
+          const allDone = day.exercises.length > 0 && doneCount === day.exercises.length;
+          return (
           <View key={day.id} style={[styles.dayCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <TouchableOpacity
               style={styles.dayHeader}
@@ -423,9 +453,25 @@ export default function ScheduleScreen() {
               </View>
               {editingFocusDayId !== day.id && (
                 <View style={styles.dayHeaderRight}>
-                  <Text style={[styles.exerciseCount, { color: colors.textSecondary }]}>
-                    {day.exercises.length} exercises
-                  </Text>
+                  {doneCount > 0 ? (
+                    <View style={styles.doneCountRow}>
+                      <Ionicons
+                        name={allDone ? 'checkmark-circle' : 'checkmark-circle-outline'}
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text
+                        testID={`done-count-${day.id}`}
+                        style={[styles.exerciseCount, { color: allDone ? colors.primary : colors.textSecondary }]}
+                      >
+                        {doneCount}/{day.exercises.length} done
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={[styles.exerciseCount, { color: colors.textSecondary }]}>
+                      {day.exercises.length} exercises
+                    </Text>
+                  )}
                   <Ionicons
                     name={expandedDay === day.id ? 'chevron-up' : 'chevron-down'}
                     size={24}
@@ -437,15 +483,29 @@ export default function ScheduleScreen() {
 
             {expandedDay === day.id && (
               <View style={styles.dayContent}>
-                {day.exercises.length > 1 && (
-                  <Text style={[styles.reorderHint, { color: colors.textSecondary }]}>
-                    Tap an exercise to move it up or down
-                  </Text>
+                {day.exercises.length > 0 && (
+                  <View style={styles.hintRow}>
+                    <Text style={[styles.reorderHint, styles.hintText, { color: colors.textSecondary }]}>
+                      {day.exercises.length > 1
+                        ? 'Tick the circle when done · tap an exercise to move it'
+                        : 'Tick the circle when done'}
+                    </Text>
+                    {doneCount > 0 && (
+                      <TouchableOpacity
+                        testID={`done-reset-${day.id}`}
+                        onPress={() => handleResetDone(index, day)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={[styles.resetText, { color: colors.primary }]}>Reset ticks</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 )}
                 {day.exercises.map((exercise, idx) => {
                   const isMoving = movingExerciseId === exercise.id;
                   const isFirst = idx === 0;
                   const isLast = idx === day.exercises.length - 1;
+                  const done = isDone(exercise.id);
                   return (
                   <TouchableOpacity
                     key={exercise.id}
@@ -463,8 +523,31 @@ export default function ScheduleScreen() {
                     ]}
                   >
                     <View style={styles.exerciseHeader}>
-                      <Text style={[styles.exerciseNumber, { color: colors.primary }]}>#{idx + 1}</Text>
-                      <Text style={[styles.exerciseNameText, { color: colors.text }]}>{exercise.name}</Text>
+                      <TouchableOpacity
+                        testID={`done-toggle-${exercise.id}`}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: done }}
+                        accessibilityLabel={done ? `Mark ${exercise.name} as not done` : `Mark ${exercise.name} as done`}
+                        onPress={() => handleToggleDone(index, day.id, exercise.id)}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
+                        style={styles.doneToggle}
+                      >
+                        <Ionicons
+                          name={done ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={28}
+                          color={done ? colors.primary : colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                      <Text style={[styles.exerciseNumber, { color: colors.primary }, done && styles.doneFaded]}>#{idx + 1}</Text>
+                      <Text
+                        style={[
+                          styles.exerciseNameText,
+                          { color: colors.text },
+                          done && { ...styles.doneFaded, textDecorationLine: 'line-through' },
+                        ]}
+                      >
+                        {exercise.name}
+                      </Text>
                       {isMoving && (
                         <View style={styles.moveButtons}>
                           {([
@@ -547,7 +630,8 @@ export default function ScheduleScreen() {
               </View>
             )}
           </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       {/* Add Program Modal */}
@@ -774,6 +858,31 @@ const styles = StyleSheet.create({
   },
   exerciseCount: {
     fontSize: 13,
+  },
+  doneCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  doneToggle: {
+    marginRight: 8,
+  },
+  doneFaded: {
+    opacity: 0.45,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  hintText: {
+    flex: 1,
+  },
+  resetText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
   },
   dayContent: {
     paddingHorizontal: 16,

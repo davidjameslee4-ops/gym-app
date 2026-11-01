@@ -14,6 +14,14 @@ import { storage } from '@/src/utils/storage';
 import { UserProfile, WorkoutProgram, WorkoutDay, WorkoutLog } from '@/src/types/workout';
 import { DEFAULT_WORKOUT_PROGRAM } from '@/src/constants/defaultWorkout';
 import { useFocusEffect } from 'expo-router';
+import {
+  Completions,
+  completionId,
+  dateKey,
+  isCompleted,
+  loadCompletions,
+  toggleCompletion,
+} from '@/src/utils/exerciseCompletion';
 
 const MOTIVATIONAL_MESSAGES = [
   "Let's crush this workout! 💪",
@@ -30,6 +38,7 @@ export default function HomeScreen() {
   const { colors } = useTheme();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [todayWorkout, setTodayWorkout] = useState<WorkoutDay | null>(null);
+  const [completions, setCompletions] = useState<Completions>({});
   const [activeProgram, setActiveProgram] = useState<WorkoutProgram | null>(null);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [motivation, setMotivation] = useState('');
@@ -81,6 +90,7 @@ export default function HomeScreen() {
     const dayIndex = (jsDay + 6) % 7;
     const workout = active.days[dayIndex];
     setTodayWorkout(workout);
+    setCompletions(await loadCompletions());
 
     // Calculate streak and check if today is completed
     const logs = await storage.getItem('workoutLogs', []) as WorkoutLog[];
@@ -235,13 +245,22 @@ export default function HomeScreen() {
 
         {todayWorkout && todayWorkout.exercises.length > 0 ? (
           <View style={styles.exerciseList}>
-            {todayWorkout.exercises.slice(0, 5).map((exercise, index) => (
+            {todayWorkout.exercises.map((exercise, index) => {
+              const cid = completionId(todayWorkout.id, exercise.id);
+              const done = isCompleted(completions, dateKey(), cid);
+              return (
               <View key={exercise.id} style={styles.exerciseItem}>
-                <View style={[styles.exerciseNumber, { backgroundColor: colors.primary }]}>
+                <View style={[styles.exerciseNumber, { backgroundColor: colors.primary }, done && styles.doneFaded]}>
                   <Text style={styles.exerciseNumberText}>{index + 1}</Text>
                 </View>
-                <View style={styles.exerciseDetails}>
-                  <Text style={[styles.exerciseName, { color: colors.text }]}>
+                <View style={[styles.exerciseDetails, done && styles.doneFaded]}>
+                  <Text
+                    style={[
+                      styles.exerciseName,
+                      { color: colors.text },
+                      done && { textDecorationLine: 'line-through' },
+                    ]}
+                  >
                     {exercise.name}
                   </Text>
                   <Text style={[styles.exerciseStats, { color: colors.textSecondary }]}>
@@ -249,13 +268,23 @@ export default function HomeScreen() {
                     {exercise.weight ? ` @ ${exercise.weight}${profile?.weightUnit || 'kg'}` : ''}
                   </Text>
                 </View>
+                <TouchableOpacity
+                  testID={`home-done-toggle-${exercise.id}`}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: done }}
+                  accessibilityLabel={done ? `Mark ${exercise.name} as not done` : `Mark ${exercise.name} as done`}
+                  onPress={async () => setCompletions(await toggleCompletion(dateKey(), cid))}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={done ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={30}
+                    color={done ? colors.primary : colors.textSecondary}
+                  />
+                </TouchableOpacity>
               </View>
-            ))}
-            {todayWorkout.exercises.length > 5 && (
-              <Text style={[styles.moreText, { color: colors.textSecondary }]}>
-                +{todayWorkout.exercises.length - 5} more exercises
-              </Text>
-            )}
+              );
+            })}
           </View>
         ) : (
           <Text style={[styles.restDayText, { color: colors.textSecondary }]}>Take a well-deserved rest!</Text>
@@ -426,6 +455,9 @@ const styles = StyleSheet.create({
   },
   exerciseDetails: {
     flex: 1,
+  },
+  doneFaded: {
+    opacity: 0.45,
   },
   exerciseName: {
     fontSize: 15,
