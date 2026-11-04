@@ -13,6 +13,7 @@ import { useTheme } from '@/src/contexts/ThemeContext';
 import { storage } from '@/src/utils/storage';
 import { UserProfile, WorkoutProgram, WorkoutDay, WorkoutLog } from '@/src/types/workout';
 import { DEFAULT_WORKOUT_PROGRAM } from '@/src/constants/defaultWorkout';
+import { dayTitle, hasCustomTitle } from '@/src/utils/dayTools';
 import { useFocusEffect } from 'expo-router';
 import {
   Completions,
@@ -150,7 +151,7 @@ export default function HomeScreen() {
               date: new Date().toISOString(),
               programId: activeProgram.id,
               dayId: todayWorkout.id,
-              dayName: todayWorkout.name,
+              dayName: hasCustomTitle(todayWorkout) ? `${dayTitle(todayWorkout)} (${todayWorkout.name})` : todayWorkout.name,
               focus: todayWorkout.focus,
               exercises: todayWorkout.exercises.map(e => ({
                 exerciseId: e.id,
@@ -230,11 +231,14 @@ export default function HomeScreen() {
       {/* Today's Workout */}
       <View style={[styles.workoutCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.workoutHeader}>
-          <View>
+          <View style={styles.workoutHeaderLeft}>
             <Text style={[styles.cardTitle, { color: colors.text }]}>Today's Workout</Text>
-            <Text style={[styles.workoutDay, { color: colors.primary }]}>
-              {todayWorkout?.name || 'Rest Day'}
+            <Text testID="home-today-title" style={[styles.workoutDay, { color: colors.primary }]}>
+              {todayWorkout ? dayTitle(todayWorkout) : 'Rest Day'}
             </Text>
+            {todayWorkout && hasCustomTitle(todayWorkout) && (
+              <Text style={[styles.workoutWeekday, { color: colors.textSecondary }]}>{todayWorkout.name}</Text>
+            )}
           </View>
           <View style={[styles.focusBadge, { backgroundColor: colors.primary + '20', borderColor: colors.primary }]}>
             <Text style={[styles.focusText, { color: colors.primary }]}>
@@ -423,11 +427,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
+  workoutHeaderLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  workoutWeekday: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   focusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
+    maxWidth: '55%',
+    flexShrink: 1,
   },
   focusText: {
     fontSize: 11,
