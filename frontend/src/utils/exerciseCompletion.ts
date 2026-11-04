@@ -3,8 +3,9 @@ import { storage } from '@/src/utils/storage';
 // Per-day "exercise completed" ticks. Stored on the device as a JSON string:
 // { "2026-11-01": ["sunday:sun-1", ...], ... }. Ticks are keyed by calendar
 // date, so they clear on their own the next day / next week's same weekday.
+// Kept for about a year so the workout streak can count ticked days.
 const KEY = 'exerciseCompletions';
-const KEEP_DAYS = 21;
+const KEEP_DAYS = 400;
 
 export type Completions = Record<string, string[]>;
 

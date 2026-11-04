@@ -15,6 +15,7 @@ import { useTheme } from '@/src/contexts/ThemeContext';
 import { storage } from '@/src/utils/storage';
 import { UserProfile, WeightEntry, WorkoutLog } from '@/src/types/workout';
 import { useFocusEffect } from 'expo-router';
+import { loadStreak, StreakResult } from '@/src/utils/streak';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -25,6 +26,7 @@ export default function ProgressScreen() {
   const [logs, setLogs] = useState<WorkoutLog[]>([]);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [newWeight, setNewWeight] = useState('');
+  const [streak, setStreak] = useState<StreakResult>({ current: 0, longest: 0, today: 'pending' });
 
   useFocusEffect(
     React.useCallback(() => {
@@ -44,6 +46,7 @@ export default function ProgressScreen() {
     setProfile(savedProfile);
     setWeightEntries(savedWeights);
     setLogs(savedLogs);
+    setStreak(await loadStreak());
   };
 
   const addWeightEntry = async () => {
@@ -76,46 +79,9 @@ export default function ProgressScreen() {
     sum + log.exercises.reduce((s, e) => s + e.sets, 0), 0
   );
 
-  const calculateStreak = () => {
-    if (logs.length === 0) return 0;
-    const sortedLogs = [...logs].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-    let streak = 0;
-    let currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
-    for (const log of sortedLogs) {
-      const logDate = new Date(log.date);
-      logDate.setHours(0, 0, 0, 0);
-      const diffDays = Math.floor((currentDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays === streak) streak++;
-      else break;
-    }
-    return streak;
-  };
-
-  const calculateLongestStreak = () => {
-    if (logs.length === 0) return 0;
-    const sortedLogs = [...logs].sort((a, b) => 
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-    let longest = 1;
-    let current = 1;
-    for (let i = 1; i < sortedLogs.length; i++) {
-      const prev = new Date(sortedLogs[i - 1].date);
-      const curr = new Date(sortedLogs[i].date);
-      prev.setHours(0, 0, 0, 0);
-      curr.setHours(0, 0, 0, 0);
-      const diff = Math.floor((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
-      if (diff === 1) {
-        current++;
-        longest = Math.max(longest, current);
-      } else {
-        current = 1;
-      }
-    }
-    return longest;
-  };
+  // Streaks: rest / recovery days count, a missed workout day breaks it (see src/utils/streak.ts)
+  const calculateStreak = () => streak.current;
+  const calculateLongestStreak = () => streak.longest;
 
   const getWeeklyCompletion = () => {
     const now = new Date();

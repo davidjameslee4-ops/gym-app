@@ -23,6 +23,7 @@ import {
   loadCompletions,
   toggleCompletion,
 } from '@/src/utils/exerciseCompletion';
+import { computeStreak } from '@/src/utils/streak';
 
 const MOTIVATIONAL_MESSAGES = [
   "Let's crush this workout! 💪",
@@ -41,7 +42,7 @@ export default function HomeScreen() {
   const [todayWorkout, setTodayWorkout] = useState<WorkoutDay | null>(null);
   const [completions, setCompletions] = useState<Completions>({});
   const [activeProgram, setActiveProgram] = useState<WorkoutProgram | null>(null);
-  const [currentStreak, setCurrentStreak] = useState(0);
+  const [logs, setLogs] = useState<WorkoutLog[]>([]);
   const [motivation, setMotivation] = useState('');
   const [todayCompleted, setTodayCompleted] = useState(false);
 
@@ -93,14 +94,13 @@ export default function HomeScreen() {
     setTodayWorkout(workout);
     setCompletions(await loadCompletions());
 
-    // Calculate streak and check if today is completed
-    const logs = await storage.getItem('workoutLogs', []) as WorkoutLog[];
-    const streak = calculateStreak(logs);
-    setCurrentStreak(streak);
+    // Workout logs (streak is computed from logs + ticks + the schedule below)
+    const savedLogs = (await storage.getItem('workoutLogs', [])) as WorkoutLog[];
+    setLogs(savedLogs || []);
 
-    // Check if today's workout is already completed
-    const today = new Date().toISOString().split('T')[0];
-    const completedToday = logs.some(l => l.date.startsWith(today));
+    // Check if today's workout is already completed (local date, not UTC)
+    const today = dateKey();
+    const completedToday = (savedLogs || []).some(l => dateKey(new Date(l.date)) === today);
     setTodayCompleted(completedToday);
 
     // Set random motivational message
@@ -108,32 +108,9 @@ export default function HomeScreen() {
     setMotivation(randomMessage);
   };
 
-  const calculateStreak = (logs: WorkoutLog[]): number => {
-    if (logs.length === 0) return 0;
-
-    const sortedLogs = [...logs].sort((a, b) => 
-      new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-
-    let streak = 0;
-    let currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
-
-    for (const log of sortedLogs) {
-      const logDate = new Date(log.date);
-      logDate.setHours(0, 0, 0, 0);
-
-      const diffDays = Math.floor((currentDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
-
-      if (diffDays === streak) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-
-    return streak;
-  };
+  // Rest / recovery days count; today only counts once done (it never breaks the streak).
+  const streak = computeStreak(activeProgram?.days, logs, completions);
+  const currentStreak = streak.current;
 
   const handleCompleteWorkout = async () => {
     if (!todayWorkout || !activeProgram || todayCompleted) return;
@@ -169,7 +146,7 @@ export default function HomeScreen() {
             await storage.setItem('workoutLogs', updatedLogs);
             
             setTodayCompleted(true);
-            setCurrentStreak(calculateStreak(updatedLogs));
+            setLogs(updatedLogs);
             Alert.alert('Great Job! 💪', 'Workout logged successfully!');
           },
         },
@@ -193,7 +170,7 @@ export default function HomeScreen() {
         </View>
         <View style={[styles.streakBadge, { backgroundColor: colors.primary }]}>
           <Ionicons name="flame" size={24} color="#FFFFFF" />
-          <Text style={styles.streakText}>{currentStreak}</Text>
+          <Text testID="streak-badge" style={styles.streakText}>{currentStreak}</Text>
         </View>
       </View>
 
@@ -322,6 +299,9 @@ export default function HomeScreen() {
           <Ionicons name="flame" size={32} color={colors.primary} />
           <Text style={[styles.quickStatValue, { color: colors.text }]}>{currentStreak}</Text>
           <Text style={[styles.quickStatLabel, { color: colors.textSecondary }]}>Day Streak</Text>
+          <Text testID="streak-hint" style={[styles.streakHint, { color: colors.textSecondary }]}>
+            Rest days count 💤
+          </Text>
         </View>
         <View style={[styles.quickStatCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="barbell" size={32} color={colors.primary} />
@@ -364,6 +344,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     gap: 8,
+  },
+  streakHint: {
+    fontSize: 11,
+    marginTop: 4,
+    textAlign: 'center',
   },
   streakText: {
     color: '#FFFFFF',

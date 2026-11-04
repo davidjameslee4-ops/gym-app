@@ -14,6 +14,8 @@ import { useTheme } from '@/src/contexts/ThemeContext';
 import { storage } from '@/src/utils/storage';
 import { WorkoutLog } from '@/src/types/workout';
 import { useFocusEffect } from 'expo-router';
+import { loadStreak } from '@/src/utils/streak';
+import { dateKey as localDateKey } from '@/src/utils/exerciseCompletion';
 
 export default function HistoryScreen() {
   const { colors, theme } = useTheme();
@@ -22,6 +24,7 @@ export default function HistoryScreen() {
   const [selectedLog, setSelectedLog] = useState<WorkoutLog | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [markedDates, setMarkedDates] = useState<any>({});
+  const [currentStreak, setCurrentStreak] = useState(0);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -36,11 +39,12 @@ export default function HistoryScreen() {
   const loadLogs = async () => {
     const savedLogs = await storage.getItem('workoutLogs', []) as WorkoutLog[];
     setLogs(savedLogs);
+    setCurrentStreak((await loadStreak()).current);
     
     // Create marked dates for calendar
     const marked: any = {};
     savedLogs.forEach(log => {
-      const dateKey = log.date.split('T')[0];
+      const dateKey = localDateKey(new Date(log.date));
       marked[dateKey] = {
         marked: true,
         dotColor: colors.primary,
@@ -62,7 +66,7 @@ export default function HistoryScreen() {
 
   const handleDayPress = (day: any) => {
     setSelectedDate(day.dateString);
-    const log = logs.find(l => l.date.startsWith(day.dateString));
+    const log = logs.find(l => localDateKey(new Date(l.date)) === day.dateString);
     if (log) {
       setSelectedLog(log);
       setShowDetailModal(true);
@@ -92,35 +96,6 @@ export default function HistoryScreen() {
     });
   };
 
-  const calculateStreak = () => {
-    if (logs.length === 0) return 0;
-
-    const sortedLogs = [...logs].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-
-    let streak = 0;
-    let currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
-
-    for (const log of sortedLogs) {
-      const logDate = new Date(log.date);
-      logDate.setHours(0, 0, 0, 0);
-
-      const diffDays = Math.floor(
-        (currentDate.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-
-      if (diffDays === streak) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-
-    return streak;
-  };
-
   const getMonthlyStats = () => {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -130,7 +105,6 @@ export default function HistoryScreen() {
     return monthlyLogs.length;
   };
 
-  const currentStreak = calculateStreak();
   const monthlyWorkouts = getMonthlyStats();
   const totalWorkouts = logs.length;
 
