@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <!-- viewport-fit=cover exposes the iPhone safe-area insets (home bar) to the app;
+         maximum-scale=1 stops iOS Safari zooming in when a text box is tapped -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <title>Gym Workout Tracker</title>
+    <meta name="description" content="Plan, track and log your gym workouts. Data stays on your phone." />
+    <!-- Installable web app (Add to Home Screen) -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Gym" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+        background-color: #000000;
+      }
+      body {
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <div id="root"></div>
+    <script>
+      // Offline support: register the service worker (web only; never runs on Android/iOS native builds)
+      if ("serviceWorker" in navigator && location.protocol === "https:") {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js").then(function () {
+            return navigator.serviceWorker.ready;
+          }).then(function (reg) {
+            // Hand the files this page already loaded (app code, icon fonts) to the cache
+            var urls = performance.getEntriesByType("resource").map(function (e) { return e.name; })
+              .filter(function (u) { return u.indexOf(location.origin) === 0; });
+            if (reg.active) reg.active.postMessage({ type: "cache-urls", urls: urls });
+          }).catch(function () {});
+          // Ask the browser to keep this app's saved data
+          if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+        });
+      }
+    </script>
+  </body>
+</html>
