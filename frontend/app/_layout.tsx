@@ -4,6 +4,10 @@ import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { installWebAlert } from "@/src/utils/webAlert";
+
+// Web (iPhone home-screen app): make Alert.alert dialogs work in the browser
+installWebAlert();
 
 // Keep the native splash visible from cold start until icon fonts register.
 // Required because @expo/vector-icons' componentDidMount fallback fires
