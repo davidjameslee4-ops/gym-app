@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,13 @@ import { DEFAULT_WORKOUT_PROGRAM } from '@/src/constants/defaultWorkout';
 import { useFocusEffect } from 'expo-router';
 import ExercisePicker from '@/src/components/ExercisePicker';
 import { dayTitle, hasCustomTitle, swapDays, renameDay } from '@/src/utils/dayTools';
+import {
+  exerciseKey,
+  findLinkedWeight,
+  joinDayNames,
+  linkWeightAcrossDays,
+  linkedWeightMessage,
+} from '@/src/utils/linkedWeights';
 import {
   Completions,
   completionId,
@@ -56,6 +63,21 @@ export default function ScheduleScreen() {
   const [exerciseReps, setExerciseReps] = useState('10-12');
   const [exerciseWeight, setExerciseWeight] = useState('');
   const [exerciseNotes, setExerciseNotes] = useState('');
+  // True once the weight field was typed in (so picking an exercise doesn't overwrite it)
+  const [weightTouched, setWeightTouched] = useState(false);
+  // Confirmation after a linked weight change ("also updated on Saturday")
+  const [linkNote, setLinkNote] = useState<string | null>(null);
+  const linkNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (linkNoteTimer.current) clearTimeout(linkNoteTimer.current);
+  }, []);
+
+  const showLinkNote = (message: string) => {
+    if (linkNoteTimer.current) clearTimeout(linkNoteTimer.current);
+    setLinkNote(message);
+    linkNoteTimer.current = setTimeout(() => setLinkNote(null), 4500);
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -159,14 +181,25 @@ export default function ScheduleScreen() {
   const handleAddExercise = async () => {
     if (!exerciseName.trim() || !selectedDay) return;
 
+    const parsedWeight = exerciseWeight.trim() ? parseFloat(exerciseWeight.replace(',', '.')) : NaN;
+    const weight = Number.isNaN(parsedWeight) ? undefined : parsedWeight;
     const newExercise: Exercise = {
-      id: `exercise-${Date.now()}`,
+      id: editingExercise ? editingExercise.id : `exercise-${Date.now()}`,
       name: exerciseName,
       sets: parseInt(exerciseSets) || 3,
       reps: exerciseReps,
-      weight: exerciseWeight ? parseFloat(exerciseWeight) : undefined,
+      weight,
       notes: exerciseNotes,
     };
+    // Linked weights: a new weight for this exercise is copied to the same exercise
+    // on every other day. Only when the weight was actually set/changed in this save,
+    // so old data stays as it is until he edits it.
+    const shouldLink =
+      weight !== undefined &&
+      (!editingExercise ||
+        editingExercise.weight !== weight ||
+        exerciseKey(editingExercise.name) !== exerciseKey(exerciseName));
+    let linkedDays: string[] = [];
 
     const updatedPrograms = programs.map(p => {
       if (p.id === activeProgram?.id) {
@@ -186,11 +219,43 @@ export default function ScheduleScreen() {
         };
       }
       return p;
+    }).map(p => {
+      if (p.id !== activeProgram?.id || !shouldLink) return p;
+      const linked = linkWeightAcrossDays(p.days, newExercise.name, weight, newExercise.id);
+      linkedDays = linked.updatedDays;
+      return linked.updatedDays.length ? { ...p, days: linked.days } : p;
     });
 
     await savePrograms(updatedPrograms);
     resetExerciseForm();
+    if (linkedDays.length && weight !== undefined) {
+      showLinkNote(linkedWeightMessage(newExercise.name, weight, linkedDays));
+    }
   };
+
+  // Picking an exercise for a new entry pre-fills the weight it already has on other days.
+  const handlePickExercise = (name: string) => {
+    setExerciseName(name);
+    if (!editingExercise && !weightTouched && activeProgram) {
+      const found = findLinkedWeight(activeProgram.days, name);
+      setExerciseWeight(found ? String(found.weight) : '');
+    }
+  };
+
+  // Other days that have the exercise currently in the form (for the "linked" hint).
+  const linkedDayNames = (() => {
+    if (!activeProgram || !showExerciseModal) return [] as string[];
+    const key = exerciseKey(exerciseName);
+    if (!key) return [] as string[];
+    const names: string[] = [];
+    activeProgram.days.forEach(d => {
+      d.exercises.forEach(e => {
+        if (e.id === editingExercise?.id || exerciseKey(e.name) !== key) return;
+        if (!names.includes(d.name)) names.push(d.name);
+      });
+    });
+    return names;
+  })();
 
   const handleToggleDone = async (dayIndex: number, dayId: string, exerciseId: string) => {
     const updated = await toggleCompletion(dateKeyForDayIndex(dayIndex), completionId(dayId, exerciseId));
@@ -309,6 +374,7 @@ export default function ScheduleScreen() {
     setExerciseReps('10-12');
     setExerciseWeight('');
     setExerciseNotes('');
+    setWeightTouched(false);
     setEditingExercise(null);
     setShowExerciseModal(false);
   };
@@ -321,6 +387,7 @@ export default function ScheduleScreen() {
     setExerciseReps(exercise.reps);
     setExerciseWeight(exercise.weight?.toString() || '');
     setExerciseNotes(exercise.notes || '');
+    setWeightTouched(false);
     setShowExerciseModal(true);
   };
 
@@ -884,7 +951,7 @@ export default function ScheduleScreen() {
               {editingExercise ? 'Edit Exercise' : 'Add Exercise'}
             </Text>
             <ScrollView>
-              <ExercisePicker value={exerciseName} onChange={setExerciseName} />
+              <ExercisePicker value={exerciseName} onChange={handlePickExercise} />
               <View style={styles.inputRow}>
                 <TextInput
                   style={[styles.inputHalf, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
@@ -904,12 +971,24 @@ export default function ScheduleScreen() {
               </View>
               <TextInput
                 style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                placeholder="Weight (optional)"
+                testID="exercise-weight-input"
+                placeholder="Weight in kg (optional)"
                 placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
+                keyboardType="decimal-pad"
                 value={exerciseWeight}
-                onChangeText={setExerciseWeight}
+                onChangeText={text => {
+                  setExerciseWeight(text);
+                  setWeightTouched(true);
+                }}
               />
+              {linkedDayNames.length > 0 && (
+                <View testID="linked-weight-hint" style={styles.linkHint}>
+                  <Ionicons name="link" size={14} color={colors.primary} />
+                  <Text style={[styles.linkHintText, { color: colors.textSecondary }]}>
+                    Weight linked with {joinDayNames(linkedDayNames)}. A new weight updates there too.
+                  </Text>
+                </View>
+              )}
               <TextInput
                 style={[styles.input, styles.textArea, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
                 placeholder="Notes (optional)"
@@ -939,6 +1018,18 @@ export default function ScheduleScreen() {
           </View>
         </View>
       </Modal>
+
+      {linkNote && (
+        <View pointerEvents="none" style={styles.linkToastWrap}>
+          <View
+            testID="linked-weight-toast"
+            style={[styles.linkToast, { backgroundColor: colors.surface, borderColor: colors.primary }]}
+          >
+            <Ionicons name="link" size={18} color={colors.primary} />
+            <Text style={[styles.linkToastText, { color: colors.text }]}>{linkNote}</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1258,6 +1349,45 @@ const styles = StyleSheet.create({
   addExerciseText: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  linkHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: -6,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  linkHintText: {
+    fontSize: 13,
+    flex: 1,
+  },
+  linkToastWrap: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 20,
+    alignItems: 'center',
+  },
+  linkToast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    maxWidth: 480,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  linkToastText: {
+    fontSize: 15,
+    fontWeight: '600',
+    flexShrink: 1,
   },
   modalOverlay: {
     flex: 1,
