@@ -9,7 +9,6 @@ import {
   Platform,
   Modal,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/src/contexts/ThemeContext';
@@ -25,17 +24,7 @@ export default function ProgressScreen() {
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
   const [logs, setLogs] = useState<WorkoutLog[]>([]);
   const [showWeightModal, setShowWeightModal] = useState(false);
-  const [showNutritionModal, setShowNutritionModal] = useState(false);
   const [newWeight, setNewWeight] = useState('');
-
-  // Nutrition calculator
-  const [age, setAge] = useState('');
-  const [height, setHeight] = useState('');
-  const [weight, setWeight] = useState('');
-  const [gender, setGender] = useState<'male' | 'female'>('male');
-  const [activityLevel, setActivityLevel] = useState<string>('moderate');
-  const [goal, setGoal] = useState<'lose' | 'maintain' | 'gain'>('maintain');
-  const [nutritionResults, setNutritionResults] = useState<any>(null);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -55,13 +44,6 @@ export default function ProgressScreen() {
     setProfile(savedProfile);
     setWeightEntries(savedWeights);
     setLogs(savedLogs);
-
-    // Pre-populate nutrition calculator
-    if (savedProfile) {
-      setAge(savedProfile.age?.toString() || '');
-      setHeight(savedProfile.height?.toString() || '');
-      setWeight(savedProfile.currentWeight.toString());
-    }
   };
 
   const addWeightEntry = async () => {
@@ -86,55 +68,6 @@ export default function ProgressScreen() {
 
     setNewWeight('');
     setShowWeightModal(false);
-  };
-
-  const calculateNutrition = () => {
-    const ageNum = parseInt(age);
-    const heightNum = parseInt(height);
-    const weightNum = parseFloat(weight);
-
-    if (!ageNum || !heightNum || !weightNum) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    // BMR using Mifflin-St Jeor equation
-    let bmr: number;
-    if (gender === 'male') {
-      bmr = 10 * weightNum + 6.25 * heightNum - 5 * ageNum + 5;
-    } else {
-      bmr = 10 * weightNum + 6.25 * heightNum - 5 * ageNum - 161;
-    }
-
-    // Activity multiplier
-    const activityMultipliers: any = {
-      sedentary: 1.2,
-      light: 1.375,
-      moderate: 1.55,
-      active: 1.725,
-      very_active: 1.9,
-    };
-
-    const tdee = bmr * activityMultipliers[activityLevel];
-
-    // Adjust for goal
-    let calories = tdee;
-    if (goal === 'lose') calories = tdee - 500;
-    if (goal === 'gain') calories = tdee + 300;
-
-    // Macros: 30% protein, 40% carbs, 30% fat
-    const protein = (calories * 0.30) / 4;
-    const carbs = (calories * 0.40) / 4;
-    const fat = (calories * 0.30) / 9;
-
-    setNutritionResults({
-      calories: Math.round(calories),
-      protein: Math.round(protein),
-      carbs: Math.round(carbs),
-      fat: Math.round(fat),
-      bmr: Math.round(bmr),
-      tdee: Math.round(tdee),
-    });
   };
 
   // Calculate stats
@@ -410,15 +343,6 @@ export default function ProgressScreen() {
           </View>
         </View>
 
-        {/* Nutrition Calculator */}
-        <TouchableOpacity
-          style={[styles.nutritionButton, { backgroundColor: colors.primary }]}
-          onPress={() => setShowNutritionModal(true)}
-        >
-          <Ionicons name="nutrition" size={24} color="#FFFFFF" />
-          <Text style={styles.nutritionButtonText}>Nutrition Calculator</Text>
-          <Ionicons name="chevron-forward" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
       </ScrollView>
 
       {/* Add Weight Modal */}
@@ -451,154 +375,6 @@ export default function ProgressScreen() {
                 <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>Save</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Nutrition Calculator Modal */}
-      <Modal visible={showNutritionModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContentLarge, { backgroundColor: colors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Nutrition Calculator</Text>
-              <TouchableOpacity onPress={() => setShowNutritionModal(false)}>
-                <Ionicons name="close" size={28} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.nutritionForm}>
-              <View style={styles.formRow}>
-                <View style={styles.formHalf}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>Age</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                    placeholder="25"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    value={age}
-                    onChangeText={setAge}
-                  />
-                </View>
-                <View style={styles.formHalf}>
-                  <Text style={[styles.label, { color: colors.textSecondary }]}>Height (cm)</Text>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                    placeholder="175"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    value={height}
-                    onChangeText={setHeight}
-                  />
-                </View>
-              </View>
-
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Weight (kg)</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.border }]}
-                placeholder="70"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="numeric"
-                value={weight}
-                onChangeText={setWeight}
-              />
-
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Gender</Text>
-              <View style={styles.optionRow}>
-                <TouchableOpacity
-                  style={[styles.optionButton, { borderColor: colors.border }, gender === 'male' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setGender('male')}
-                >
-                  <Text style={[styles.optionText, { color: colors.text }, gender === 'male' && { color: '#FFFFFF' }]}>Male</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.optionButton, { borderColor: colors.border }, gender === 'female' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setGender('female')}
-                >
-                  <Text style={[styles.optionText, { color: colors.text }, gender === 'female' && { color: '#FFFFFF' }]}>Female</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Activity Level</Text>
-              <View style={styles.activityOptions}>
-                {[
-                  { id: 'sedentary', label: 'Sedentary' },
-                  { id: 'light', label: 'Light' },
-                  { id: 'moderate', label: 'Moderate' },
-                  { id: 'active', label: 'Active' },
-                  { id: 'very_active', label: 'Very Active' },
-                ].map(opt => (
-                  <TouchableOpacity
-                    key={opt.id}
-                    style={[styles.activityOption, { borderColor: colors.border }, activityLevel === opt.id && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                    onPress={() => setActivityLevel(opt.id)}
-                  >
-                    <Text style={[styles.optionText, { color: colors.text }, activityLevel === opt.id && { color: '#FFFFFF' }]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Goal</Text>
-              <View style={styles.optionRow}>
-                <TouchableOpacity
-                  style={[styles.optionButton, { borderColor: colors.border }, goal === 'lose' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setGoal('lose')}
-                >
-                  <Text style={[styles.optionText, { color: colors.text }, goal === 'lose' && { color: '#FFFFFF' }]}>Lose</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.optionButton, { borderColor: colors.border }, goal === 'maintain' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setGoal('maintain')}
-                >
-                  <Text style={[styles.optionText, { color: colors.text }, goal === 'maintain' && { color: '#FFFFFF' }]}>Maintain</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.optionButton, { borderColor: colors.border }, goal === 'gain' && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                  onPress={() => setGoal('gain')}
-                >
-                  <Text style={[styles.optionText, { color: colors.text }, goal === 'gain' && { color: '#FFFFFF' }]}>Gain</Text>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.calculateButton, { backgroundColor: colors.primary }]}
-                onPress={calculateNutrition}
-              >
-                <Text style={styles.calculateButtonText}>Calculate</Text>
-              </TouchableOpacity>
-
-              {nutritionResults && (
-                <View style={[styles.resultsContainer, { backgroundColor: colors.background, borderColor: colors.primary }]}>
-                  <Text style={[styles.resultsTitle, { color: colors.text }]}>Your Daily Targets</Text>
-                  <View style={styles.resultRow}>
-                    <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>Calories</Text>
-                    <Text style={[styles.resultValue, { color: colors.primary }]}>{nutritionResults.calories} kcal</Text>
-                  </View>
-                  <View style={styles.resultRow}>
-                    <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>Protein</Text>
-                    <Text style={[styles.resultValue, { color: colors.text }]}>{nutritionResults.protein}g</Text>
-                  </View>
-                  <View style={styles.resultRow}>
-                    <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>Carbohydrates</Text>
-                    <Text style={[styles.resultValue, { color: colors.text }]}>{nutritionResults.carbs}g</Text>
-                  </View>
-                  <View style={styles.resultRow}>
-                    <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>Fat</Text>
-                    <Text style={[styles.resultValue, { color: colors.text }]}>{nutritionResults.fat}g</Text>
-                  </View>
-                  <View style={[styles.resultDivider, { backgroundColor: colors.border }]} />
-                  <View style={styles.resultRow}>
-                    <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>BMR</Text>
-                    <Text style={[styles.resultValue, { color: colors.textSecondary }]}>{nutritionResults.bmr} kcal</Text>
-                  </View>
-                  <View style={styles.resultRow}>
-                    <Text style={[styles.resultLabel, { color: colors.textSecondary }]}>TDEE</Text>
-                    <Text style={[styles.resultValue, { color: colors.textSecondary }]}>{nutritionResults.tdee} kcal</Text>
-                  </View>
-                </View>
-              )}
-            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -700,21 +476,6 @@ const styles = StyleSheet.create({
   workoutStat: { alignItems: 'center', gap: 8 },
   workoutStatValue: { fontSize: 28, fontWeight: 'bold' },
   workoutStatLabel: { fontSize: 12 },
-  nutritionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    margin: 16,
-    padding: 20,
-    borderRadius: 12,
-    gap: 12,
-  },
-  nutritionButtonText: {
-    flex: 1,
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -727,19 +488,6 @@ const styles = StyleSheet.create({
     maxWidth: 400,
     borderRadius: 16,
     padding: 24,
-  },
-  modalContentLarge: {
-    width: '100%',
-    maxWidth: 500,
-    borderRadius: 16,
-    padding: 24,
-    maxHeight: '90%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
   },
   modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 16 },
   input: {
@@ -758,61 +506,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonText: { fontSize: 16, fontWeight: 'bold' },
-  nutritionForm: {},
-  formRow: { flexDirection: 'row', gap: 12 },
-  formHalf: { flex: 1 },
-  label: { fontSize: 13, fontWeight: '600', marginBottom: 8, marginTop: 4 },
-  optionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  optionButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: 'center',
-  },
-  optionText: { fontSize: 14, fontWeight: '600' },
-  activityOptions: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  activityOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    alignItems: 'center',
-  },
-  calculateButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  calculateButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  resultsContainer: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-  },
-  resultsTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
-  resultRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  resultLabel: { fontSize: 14 },
-  resultValue: { fontSize: 16, fontWeight: 'bold' },
-  resultDivider: {
-    height: 1,
-    marginVertical: 8,
-  },
 });
