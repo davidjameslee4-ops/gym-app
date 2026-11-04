@@ -3,6 +3,8 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '@/src/contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text } from 'react-native';
+import { PlatformPressable } from '@react-navigation/elements';
 
 function TabLayout() {
   const { colors } = useTheme();
@@ -26,10 +28,21 @@ function TabLayout() {
           paddingBottom: tabBarPaddingBottom,
           paddingTop: 8,
         },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
-        },
+        // 8 tabs: drop the tab's side padding (and let labels shrink on very
+        // narrow phones) so "Nutrition" / "Schedule" aren't cut off
+        tabBarButton: (props) => (
+          <PlatformPressable {...props} style={[props.style, { paddingHorizontal: 0 }]} />
+        ),
+        tabBarLabel: ({ color, children }) => (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            style={{ color, fontSize: 10, fontWeight: '600', textAlign: 'center' }}
+          >
+            {children}
+          </Text>
+        ),
       }}
     >
       <Tabs.Screen
@@ -74,6 +87,15 @@ function TabLayout() {
           title: 'Progress',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="trending-up" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="nutrition"
+        options={{
+          title: 'Nutrition',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="nutrition" size={size} color={color} />
           ),
         }}
       />
