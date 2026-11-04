@@ -17,6 +17,7 @@ import { WorkoutProgram, WorkoutDay, Exercise } from '@/src/types/workout';
 import { DEFAULT_WORKOUT_PROGRAM } from '@/src/constants/defaultWorkout';
 import { useFocusEffect } from 'expo-router';
 import ExercisePicker from '@/src/components/ExercisePicker';
+import { dayTitle, hasCustomTitle, swapDays, renameDay } from '@/src/utils/dayTools';
 import {
   Completions,
   completionId,
@@ -42,6 +43,11 @@ export default function ScheduleScreen() {
   const [movingExerciseId, setMovingExerciseId] = useState<string | null>(null);
   // Exercises ticked off as done, per calendar date
   const [completions, setCompletions] = useState<Completions>({});
+  // Day menu ("⋯" on a day header): which day slot it's open for, and which view
+  const [dayMenuIndex, setDayMenuIndex] = useState<number | null>(null);
+  const [dayMenuMode, setDayMenuMode] = useState<'menu' | 'move' | 'rename'>('menu');
+  const [renameInput, setRenameInput] = useState('');
+  const todayIndex = (new Date().getDay() + 6) % 7;
   
   // Form states
   const [programName, setProgramName] = useState('');
@@ -233,6 +239,44 @@ export default function ScheduleScreen() {
     );
   };
 
+  const openDayMenu = (index: number) => {
+    setDayMenuIndex(index);
+    setDayMenuMode('menu');
+    setRenameInput('');
+  };
+
+  const closeDayMenu = () => {
+    setDayMenuIndex(null);
+    setDayMenuMode('menu');
+    setRenameInput('');
+  };
+
+  // Swap the workouts in two day slots (exercises, muscle groups and custom name move;
+  // the weekday labels stay put), so nothing is lost.
+  const handleMoveDay = async (from: number, to: number) => {
+    if (!activeProgram) return;
+    const movedId = activeProgram.days[from]?.id;
+    const updatedPrograms = programs.map(p =>
+      p.id === activeProgram.id ? { ...p, days: swapDays(p.days, from, to) } : p
+    );
+    await savePrograms(updatedPrograms);
+    setMovingExerciseId(null);
+    setEditingFocusDayId(null);
+    if (movedId) setExpandedDay(movedId);
+    closeDayMenu();
+  };
+
+  const handleRenameDay = async (index: number, title: string) => {
+    if (!activeProgram) return;
+    const updatedPrograms = programs.map(p =>
+      p.id === activeProgram.id
+        ? { ...p, days: p.days.map((d, i) => (i === index ? renameDay(d, title) : d)) }
+        : p
+    );
+    await savePrograms(updatedPrograms);
+    closeDayMenu();
+  };
+
   const handleMoveExercise = async (dayId: string, exerciseId: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
     const updatedPrograms = programs.map(p => {
       if (p.id !== activeProgram?.id) return p;
@@ -387,7 +431,21 @@ export default function ScheduleScreen() {
                   <Text style={styles.dayNumberText}>{index + 1}</Text>
                 </View>
                 <View style={styles.dayHeaderTextWrap}>
-                  <Text style={[styles.dayName, { color: colors.text }]}>{day.name}</Text>
+                  {(hasCustomTitle(day) || index === todayIndex) && (
+                    <View style={styles.weekdayRow}>
+                      {hasCustomTitle(day) && (
+                        <Text testID={`day-weekday-${index}`} style={[styles.weekdayLabel, { color: colors.primary }]}>
+                          {day.name.toUpperCase()}
+                        </Text>
+                      )}
+                      {index === todayIndex && (
+                        <View style={[styles.todayBadge, { backgroundColor: colors.primary + '25', borderColor: colors.primary }]}>
+                          <Text style={[styles.todayBadgeText, { color: colors.primary }]}>TODAY</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  <Text testID={`day-title-${index}`} style={[styles.dayName, { color: colors.text }]}>{dayTitle(day)}</Text>
                   {editingFocusDayId === day.id ? (
                     <View style={styles.focusEditRow}>
                       <TextInput
@@ -472,9 +530,18 @@ export default function ScheduleScreen() {
                       {day.exercises.length} exercises
                     </Text>
                   )}
+                  <TouchableOpacity
+                    testID={`day-menu-${index}`}
+                    accessibilityLabel={`Move or rename ${dayTitle(day)}`}
+                    style={[styles.dayMenuButton, { borderColor: colors.border }]}
+                    onPress={() => openDayMenu(index)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={18} color={colors.text} />
+                  </TouchableOpacity>
                   <Ionicons
                     name={expandedDay === day.id ? 'chevron-up' : 'chevron-down'}
-                    size={24}
+                    size={22}
                     color={colors.textSecondary}
                   />
                 </View>
@@ -634,6 +701,148 @@ export default function ScheduleScreen() {
         })}
       </ScrollView>
 
+      {/* Day menu: move / rename a day */}
+      <Modal visible={dayMenuIndex !== null} transparent animationType="fade" onRequestClose={closeDayMenu}>
+        <View style={styles.modalOverlay}>
+          <View testID="day-menu-sheet" style={[styles.modalContent, { backgroundColor: colors.surface }]}>
+            {(() => {
+              const menuDay = activeProgram && dayMenuIndex !== null ? activeProgram.days[dayMenuIndex] : null;
+              if (!menuDay || dayMenuIndex === null || !activeProgram) return null;
+              if (dayMenuMode === 'rename') {
+                return (
+                  <>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>Rename {menuDay.name}</Text>
+                    <Text style={[styles.dayMenuHint, { color: colors.textSecondary }]}>
+                      Give this workout a name, e.g. Leg day or Push. {menuDay.name} still shows above it.
+                    </Text>
+                    <TextInput
+                      testID="day-rename-input"
+                      style={[styles.input, { backgroundColor: colors.background, color: colors.text, borderColor: colors.primary }]}
+                      placeholder={menuDay.name}
+                      placeholderTextColor={colors.textSecondary}
+                      value={renameInput}
+                      onChangeText={setRenameInput}
+                      autoFocus
+                      maxLength={40}
+                      returnKeyType="done"
+                      onSubmitEditing={() => handleRenameDay(dayMenuIndex, renameInput)}
+                    />
+                    {hasCustomTitle(menuDay) && (
+                      <TouchableOpacity
+                        testID="day-rename-clear"
+                        style={styles.dayMenuLink}
+                        onPress={() => handleRenameDay(dayMenuIndex, '')}
+                      >
+                        <Text style={[styles.dayMenuLinkText, { color: colors.textSecondary }]}>
+                          Remove custom name (show "{menuDay.name}")
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity
+                        style={[styles.modalButton, { backgroundColor: colors.border }]}
+                        onPress={() => setDayMenuMode('menu')}
+                      >
+                        <Text style={[styles.modalButtonText, { color: colors.text }]}>Back</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        testID="day-rename-save"
+                        style={[styles.modalButton, { backgroundColor: colors.primary }]}
+                        onPress={() => handleRenameDay(dayMenuIndex, renameInput)}
+                      >
+                        <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>Save</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                );
+              }
+              if (dayMenuMode === 'move') {
+                return (
+                  <>
+                    <Text style={[styles.modalTitle, { color: colors.text }]}>Move {dayTitle(menuDay)} to…</Text>
+                    <Text style={[styles.dayMenuHint, { color: colors.textSecondary }]}>
+                      The two days swap, so no exercises are lost.
+                    </Text>
+                    <ScrollView style={styles.dayMoveList}>
+                      {activeProgram.days.map((d, i) =>
+                        i === dayMenuIndex ? null : (
+                          <TouchableOpacity
+                            key={d.id}
+                            testID={`day-move-to-${i}`}
+                            style={[styles.dayMoveOption, { borderColor: colors.border, backgroundColor: colors.background }]}
+                            onPress={() => handleMoveDay(dayMenuIndex, i)}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.dayMoveName, { color: colors.text }]}>
+                                {d.name}{i === todayIndex ? '  · today' : ''}
+                              </Text>
+                              <Text style={[styles.dayMoveSub, { color: colors.textSecondary }]} numberOfLines={1}>
+                                Now: {hasCustomTitle(d) ? `${d.title} · ` : ''}{d.focus || 'Rest'} ({d.exercises.length})
+                              </Text>
+                            </View>
+                            <Ionicons name="swap-vertical" size={20} color={colors.primary} />
+                          </TouchableOpacity>
+                        )
+                      )}
+                    </ScrollView>
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity
+                        style={[styles.modalButton, { backgroundColor: colors.border }]}
+                        onPress={() => setDayMenuMode('menu')}
+                      >
+                        <Text style={[styles.modalButtonText, { color: colors.text }]}>Back</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                );
+              }
+              return (
+                <>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>{dayTitle(menuDay)}</Text>
+                  {hasCustomTitle(menuDay) && (
+                    <Text style={[styles.dayMenuHint, { color: colors.textSecondary }]}>{menuDay.name}</Text>
+                  )}
+                  <TouchableOpacity
+                    testID="day-menu-move"
+                    style={[styles.dayMenuAction, { borderColor: colors.border, backgroundColor: colors.background }]}
+                    onPress={() => setDayMenuMode('move')}
+                  >
+                    <Ionicons name="swap-vertical" size={22} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.dayMenuActionText, { color: colors.text }]}>Move to another day</Text>
+                      <Text style={[styles.dayMoveSub, { color: colors.textSecondary }]}>Swaps the two days</Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    testID="day-menu-rename"
+                    style={[styles.dayMenuAction, { borderColor: colors.border, backgroundColor: colors.background }]}
+                    onPress={() => {
+                      setRenameInput(hasCustomTitle(menuDay) ? menuDay.title || '' : '');
+                      setDayMenuMode('rename');
+                    }}
+                  >
+                    <Ionicons name="create-outline" size={22} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.dayMenuActionText, { color: colors.text }]}>Rename</Text>
+                      <Text style={[styles.dayMoveSub, { color: colors.textSecondary }]}>e.g. Leg day, Push</Text>
+                    </View>
+                  </TouchableOpacity>
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      testID="day-menu-close"
+                      style={[styles.modalButton, { backgroundColor: colors.border }]}
+                      onPress={closeDayMenu}
+                    >
+                      <Text style={[styles.modalButtonText, { color: colors.text }]}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              );
+            })()}
+          </View>
+        </View>
+      </Modal>
+
       {/* Add Program Modal */}
       <Modal visible={showProgramModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -792,9 +1001,87 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   dayHeaderLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginRight: 8,
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  weekdayLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  todayBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  todayBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  dayMenuButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayMenuHint: {
+    fontSize: 14,
+    marginTop: -8,
+    marginBottom: 16,
+  },
+  dayMenuAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  dayMenuActionText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dayMenuLink: {
+    paddingVertical: 6,
+    marginBottom: 6,
+  },
+  dayMenuLinkText: {
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  dayMoveList: {
+    maxHeight: 380,
+  },
+  dayMoveOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  dayMoveName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dayMoveSub: {
+    fontSize: 12,
+    marginTop: 2,
   },
   dayNumber: {
     width: 40,

@@ -9,7 +9,10 @@ export interface Exercise {
 
 export interface WorkoutDay {
   id: string;
+  /** Weekday / slot label (e.g. "Monday"). Stays with the slot when days are moved. */
   name: string;
+  /** Optional custom name for the workout (e.g. "Leg day"). Travels with the workout. */
+  title?: string;
   focus: string;
   exercises: Exercise[];
 }
