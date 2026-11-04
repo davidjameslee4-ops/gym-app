@@ -4,8 +4,8 @@
  * - Other same-origin files (icons, fonts, images): serve cached, refresh in background.
  * Workout data lives in the browser's localStorage, never in this cache.
  */
-const CACHE = "gym-pwa-v2";
-const SHELL = ["/", "/manifest.json", "/apple-touch-icon.png", "/icons/icon-192.png", "/icons/icon-512.png"];
+const CACHE = "gym-pwa-v3";
+const SHELL = ["/", "/manifest.json", "/apple-touch-icon.png", "/icons/icon-192.png", "/icons/icon-512.png", "/icons/icon-maskable-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
