@@ -12,6 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ACCENT_COLORS } from '@/src/contexts/ThemeContext';
 import { storage } from '@/src/utils/storage';
+import { onDataChanged } from '@/src/utils/dataEvents';
+import { router } from 'expo-router';
 import { UserProfile } from '@/src/types/workout';
 
 export default function SettingsScreen() {
@@ -20,6 +22,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadSettings();
+    return onDataChanged(loadSettings);
   }, []);
 
   const loadSettings = async () => {
@@ -37,42 +40,12 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleExportData = async () => {
-    try {
-      const programs = await storage.getItem('workoutPrograms', []);
-      const logs = await storage.getItem('workoutLogs', []);
-      const profile = await storage.getItem('userProfile', null);
-      
-      const exportData = {
-        version: '1.0',
-        exportDate: new Date().toISOString(),
-        data: {
-          programs,
-          logs,
-          profile,
-        },
-      };
-
-      const jsonString = JSON.stringify(exportData, null, 2);
-      console.log('Export data:', jsonString);
-      
-      Alert.alert(
-        'Export Data',
-        'Your data has been prepared for export. In a production app, this would save to a file or share via the system share sheet.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('Export error:', error);
-      Alert.alert('Error', 'Failed to export data');
-    }
+  const handleExportData = () => {
+    router.push('/data-export');
   };
 
   const handleImportData = () => {
-    Alert.alert(
-      'Import Data',
-      'In a production app, this would allow you to select and import a previously exported data file.',
-      [{ text: 'OK' }]
-    );
+    router.push('/data-import');
   };
 
   const handleBackupData = async () => {
@@ -276,7 +249,7 @@ export default function SettingsScreen() {
             <View style={styles.settingText}>
               <Text style={[styles.settingTitle, { color: colors.text }]}>Export Data</Text>
               <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
-                Save all your data to a file
+                Copy or share everything to move it to another phone
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -290,7 +263,7 @@ export default function SettingsScreen() {
             <View style={styles.settingText}>
               <Text style={[styles.settingTitle, { color: colors.text }]}>Import Data</Text>
               <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
-                Restore data from a file
+                Paste data from your other phone
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
@@ -346,7 +319,7 @@ export default function SettingsScreen() {
         {/* App Info */}
         <View style={[styles.appInfo, { borderTopColor: colors.border }]}>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>
-            Gym Workout Tracker v1.0.0
+            Gym Workout Tracker v1.6.0
           </Text>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>
             All data is stored locally on your device

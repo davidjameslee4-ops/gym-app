@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { storage } from '@/src/utils/storage';
+import { onDataChanged } from '@/src/utils/dataEvents';
 
 type Theme = 'dark' | 'light';
 
@@ -71,6 +72,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     loadTheme();
+    return onDataChanged(loadTheme);
   }, []);
 
   const loadTheme = async () => {
