@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/src/contexts/ThemeContext';
 import { storage } from '@/src/utils/storage';
+import { onDataChanged } from '@/src/utils/dataEvents';
 
 export default function TimerScreen() {
   const { colors } = useTheme();
@@ -29,7 +30,9 @@ export default function TimerScreen() {
 
   useEffect(() => {
     loadSettings();
+    const offData = onDataChanged(loadSettings);
     return () => {
+      offData();
       if (stopwatchInterval.current) clearInterval(stopwatchInterval.current);
       if (countdownInterval.current) clearInterval(countdownInterval.current);
     };

@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
+import { ThemeProvider } from "@/src/contexts/ThemeContext";
 import { installWebAlert } from "@/src/utils/webAlert";
 
 // Web (iPhone home-screen app): make Alert.alert dialogs work in the browser
@@ -30,9 +31,11 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      </Stack>
+      <ThemeProvider>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        </Stack>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

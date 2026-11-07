@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { ThemeProvider, useTheme } from '@/src/contexts/ThemeContext';
+import { useTheme } from '@/src/contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native';
 import { PlatformPressable } from '@react-navigation/elements';
@@ -122,9 +122,6 @@ function TabLayout() {
 }
 
 export default function Layout() {
-  return (
-    <ThemeProvider>
-      <TabLayout />
-    </ThemeProvider>
-  );
+  // ThemeProvider lives in the root layout, so the Export/Import screens share it.
+  return <TabLayout />;
 }

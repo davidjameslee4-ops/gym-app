@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/src/contexts/ThemeContext';
+import { onDataChanged } from '@/src/utils/dataEvents';
 import { SECTIONS, MealSection, FoodTag } from '@/src/constants/recipes';
 import {
   DEFAULT_EXCLUSIONS,
@@ -38,6 +39,9 @@ export default function NutritionScreen() {
 
   useEffect(() => {
     loadExclusions().then(setExclusions);
+    return onDataChanged(() => {
+      loadExclusions().then(setExclusions);
+    });
   }, []);
 
   const update = (next: Exclusions) => {
