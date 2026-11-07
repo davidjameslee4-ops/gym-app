@@ -41,6 +41,8 @@ export interface WorkoutLog {
     notes?: string;
   }[];
   completed: boolean;
+  /** Added by "Fill in past history" rather than tapped on the day. Removable on its own. */
+  backfilled?: boolean;
 }
 
 export interface UserProfile {

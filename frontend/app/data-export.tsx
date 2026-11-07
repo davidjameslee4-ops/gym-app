@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View, Clipboard } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, Clipboard } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/src/contexts/ThemeContext';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { BuiltExport, buildExport, ExportSummary } from '@/src/utils/dataTransfer';
 import { describeSummary } from '@/src/utils/dataSummary';
 
@@ -53,8 +55,16 @@ const shareText = async (exported: BuiltExport): Promise<'shared' | 'downloaded'
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     return 'downloaded';
   }
-  const result = await Share.share({ title, message: exported.text });
-  return result.action === Share.dismissedAction ? 'cancelled' : 'shared';
+  // Phones: write the copy to a file in the app's cache and share the FILE. A long text
+  // handed to the share sheet as a message is not reliable; a file is.
+  const stamp = new Date().toISOString().slice(0, 10);
+  const file = new File(Paths.cache, `gym-data-${stamp}.txt`);
+  if (file.exists) file.delete();
+  file.create({ overwrite: true, intermediates: true });
+  file.write(exported.text);
+  if (!(await Sharing.isAvailableAsync())) throw new Error('sharing unavailable');
+  await Sharing.shareAsync(file.uri, { mimeType: 'text/plain', dialogTitle: title, UTI: 'public.plain-text' });
+  return 'shared';
 };
 
 export default function ExportDataScreen() {
@@ -74,7 +84,7 @@ export default function ExportDataScreen() {
   }, []);
 
   const onCopy = async () => {
-    if (!exported) return;
+    if (!exported || exported.tooLong) return;
     try {
       const ok = await copyText(exported.text);
       setNote(ok
@@ -130,15 +140,25 @@ export default function ExportDataScreen() {
                   Your history is big, so the copy is packed to fit in one WhatsApp message. Paste it the same way; Import reads it.
                 </Text>
               ) : null}
+              {exported?.photoLeftOut ? (
+                <Text testID="export-photo-left-out" style={[styles.small, { color: colors.textSecondary }]}>
+                  Your profile photo is left out so the copy fits in one WhatsApp message. Everything else is in it; set the photo again on the other phone.
+                </Text>
+              ) : null}
+              {exported?.tooLong ? (
+                <Text testID="export-too-long" style={[styles.small, { color: colors.error }]}>
+                  This is too long for one WhatsApp message, so pasting it would cut it off. Use Share instead: it sends a file.
+                </Text>
+              ) : null}
             </>
           )}
         </View>
 
         <TouchableOpacity
           testID="export-copy"
-          disabled={!exported}
+          disabled={!exported || exported.tooLong}
           onPress={onCopy}
-          style={[styles.button, { backgroundColor: colors.primary, opacity: exported ? 1 : 0.5 }]}
+          style={[styles.button, { backgroundColor: colors.primary, opacity: exported && !exported.tooLong ? 1 : 0.5 }]}
         >
           <Ionicons name="copy-outline" size={20} color="#FFFFFF" />
           <Text style={styles.buttonText}>Copy to clipboard</Text>
