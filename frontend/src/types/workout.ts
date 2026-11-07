@@ -61,6 +61,22 @@ export interface WeightEntry {
   weight: number;
 }
 
+/** Body measurements in cm. Every value is optional: an entry holds only what was typed. */
+export interface BodyMeasurementValues {
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  neck?: number;
+  arm?: number;
+  thigh?: number;
+}
+
+export interface BodyMeasurementEntry {
+  id: string;
+  date: string;
+  values: BodyMeasurementValues;
+}
+
 export interface AppSettings {
   theme: 'dark' | 'light';
   weightUnit: 'kg' | 'lbs';

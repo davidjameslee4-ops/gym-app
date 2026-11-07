@@ -1,6 +1,6 @@
 // Export / import of everything the app keeps on this device.
 //
-// Export: every stored key (workouts, programs, profile, weigh-ins, ticks,
+// Export: every stored key (workouts, programs, profile, weigh-ins, body measurements, ticks,
 // food choices, theme, units, ...) as one JSON object with a `version` field.
 // Big exports are packed (gzip + base64, prefixed "gymdata2:") so they still
 // fit in one WhatsApp message; the import reads both forms.
@@ -14,7 +14,7 @@ import { gunzipSync, gzipSync, strFromU8, strToU8 } from 'fflate';
 
 import { emitDataChanged } from '@/src/utils/dataEvents';
 
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '1.7.0';
 export const EXPORT_FORMAT = 'gym-app-export';
 export const EXPORT_VERSION = 2;
 
@@ -32,6 +32,7 @@ export interface ExportSummary {
   programs: number;
   workouts: number;
   weighIns: number;
+  measurements: number;
   tickedDays: number;
   profileName: string | null;
   exportedAt: string | null;
@@ -66,6 +67,7 @@ const summarize = (data: Record<string, unknown>, exportedAt: string | null): Ex
   const programs = Array.isArray(data.workoutPrograms) ? data.workoutPrograms.length : 0;
   const workouts = Array.isArray(data.workoutLogs) ? data.workoutLogs.length : 0;
   const weighIns = Array.isArray(data.weightEntries) ? data.weightEntries.length : 0;
+  const measurements = Array.isArray(data.bodyMeasurements) ? data.bodyMeasurements.length : 0;
   const ticks = data.exerciseCompletions;
   let tickedDays = 0;
   if (ticks && typeof ticks === 'object' && !Array.isArray(ticks)) {
@@ -78,7 +80,7 @@ const summarize = (data: Record<string, unknown>, exportedAt: string | null): Ex
     profile && typeof profile === 'object' && typeof profile.name === 'string' && profile.name.trim()
       ? profile.name.trim()
       : null;
-  return { programs, workouts, weighIns, tickedDays, profileName, exportedAt };
+  return { programs, workouts, weighIns, measurements, tickedDays, profileName, exportedAt };
 };
 
 // ---- base64 (no Buffer on the device) ----
@@ -190,6 +192,9 @@ export function parseImportText(input: string): ParsedImport {
   }
   if (src.weightEntries !== undefined && !Array.isArray(src.weightEntries)) {
     throw new Error('The weigh-ins in this export are damaged, so nothing was imported.');
+  }
+  if (src.bodyMeasurements !== undefined && !Array.isArray(src.bodyMeasurements)) {
+    throw new Error('The body measurements in this export are damaged, so nothing was imported.');
   }
   if (src.userProfile !== undefined && src.userProfile !== null && typeof src.userProfile !== 'object') {
     throw new Error('The profile in this export is damaged, so nothing was imported.');

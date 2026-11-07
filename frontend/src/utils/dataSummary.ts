@@ -9,6 +9,7 @@ export const describeSummary = (s: ExportSummary): string => {
     `${plural(s.workouts, 'workout', 'workouts')} logged`,
     plural(s.weighIns, 'weigh-in', 'weigh-ins'),
   ];
+  if (s.measurements > 0) parts.push(plural(s.measurements, 'measurement entry', 'measurement entries'));
   if (s.tickedDays > 0) parts.push(plural(s.tickedDays, 'day with ticks', 'days with ticks'));
   const head = parts.join(', ');
   return s.profileName ? `${head}. Profile: ${s.profileName}.` : `${head}.`;
