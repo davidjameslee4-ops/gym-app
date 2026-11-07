@@ -256,6 +256,21 @@ export default function SettingsScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
+            testID="settings-fill-history"
+            style={[styles.settingCard, styles.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => router.push('/data-backfill')}
+          >
+            <Ionicons name="calendar-outline" size={24} color={colors.primary} />
+            <View style={styles.settingText}>
+              <Text style={[styles.settingTitle, { color: colors.text }]}>Fill in past history</Text>
+              <Text style={[styles.settingDescription, { color: colors.textSecondary }]}>
+                Mark the workouts you did but never logged, from a start date to yesterday
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.settingCard, styles.actionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
             onPress={handleImportData}
           >
@@ -319,7 +334,7 @@ export default function SettingsScreen() {
         {/* App Info */}
         <View style={[styles.appInfo, { borderTopColor: colors.border }]}>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>
-            Gym Workout Tracker v1.7.0
+            Gym Workout Tracker v1.8.0
           </Text>
           <Text style={[styles.appInfoText, { color: colors.textSecondary }]}>
             All data is stored locally on your device

@@ -14,7 +14,7 @@ import { gunzipSync, gzipSync, strFromU8, strToU8 } from 'fflate';
 
 import { emitDataChanged } from '@/src/utils/dataEvents';
 
-export const APP_VERSION = '1.7.0';
+export const APP_VERSION = '1.8.0';
 export const EXPORT_FORMAT = 'gym-app-export';
 export const EXPORT_VERSION = 2;
 
@@ -22,6 +22,10 @@ export const EXPORT_VERSION = 2;
 export const SAFETY_KEY = 'import_safety_copy';
 /** The old Backup button's copy. Not exported, and never touched by an import. */
 export const BACKUP_KEY = 'backup_latest';
+/** Holds the device's data from just before a "Fill in past history" run, for reference. Never exported. */
+export const BACKFILL_SAFETY_KEY = 'backfill_safety_copy';
+/** Keys that are not user data: never exported, never imported, never wiped by an import. */
+const NOT_DATA_KEYS = [SAFETY_KEY, BACKUP_KEY, BACKFILL_SAFETY_KEY];
 
 const PACK_PREFIX = 'gymdata2:';
 // WhatsApp takes at most 65,536 characters in one text message.
@@ -43,7 +47,15 @@ export interface BuiltExport {
   packed: boolean;
   chars: number;
   summary: ExportSummary;
+  /** The profile photo was left out so the copy fits in one WhatsApp message. */
+  photoLeftOut: boolean;
+  /** Still longer than one WhatsApp message after that: a paste would be cut off. Use Share instead. */
+  tooLong: boolean;
 }
+
+/** WhatsApp takes at most 65,536 characters in one message; stay under it with room to spare. */
+export const WHATSAPP_SAFE_CHARS = 60000;
+const CUT_OFF_MESSAGE = 'This text looks cut off, WhatsApp shortens long messages. Use Share as a file instead.';
 
 export interface ParsedImport {
   data: Record<string, unknown>;
@@ -125,7 +137,7 @@ const fromBase64 = (text: string): Uint8Array => {
 // ---- export ----
 
 export async function buildExport(): Promise<BuiltExport> {
-  const raw = await readRaw([SAFETY_KEY, BACKUP_KEY]);
+  const raw = await readRaw(NOT_DATA_KEYS);
   const data: Record<string, unknown> = {};
   Object.keys(raw).forEach(k => {
     try {
@@ -135,11 +147,34 @@ export async function buildExport(): Promise<BuiltExport> {
     }
   });
   const exportedAt = new Date().toISOString();
-  const file = { format: EXPORT_FORMAT, version: EXPORT_VERSION, exportedAt, appVersion: APP_VERSION, data };
-  const json = JSON.stringify(file);
-  const packed = json.length > PACK_THRESHOLD;
-  const text = packed ? PACK_PREFIX + toBase64(gzipSync(strToU8(json), { level: 9 })) : json;
-  return { text, packed, chars: text.length, summary: summarize(data, exportedAt) };
+  const encode = (body: Record<string, unknown>): string => {
+    const file = { format: EXPORT_FORMAT, version: EXPORT_VERSION, exportedAt, appVersion: APP_VERSION, data: body };
+    const json = JSON.stringify(file);
+    const packed = json.length > PACK_THRESHOLD;
+    return packed ? PACK_PREFIX + toBase64(gzipSync(strToU8(json), { level: 9 })) : json;
+  };
+
+  let body = data;
+  let photoLeftOut = false;
+  let text = encode(body);
+  // The profile photo is a whole picture as text and is the bulk of a big copy. If the copy
+  // would not fit in one message, leave only the photo out; everything else is still moved.
+  const profile = data.userProfile;
+  if (text.length > WHATSAPP_SAFE_CHARS && profile && typeof profile === 'object' && 'profilePicture' in profile) {
+    const { profilePicture: _photo, ...rest } = profile as Record<string, unknown>;
+    body = { ...data, userProfile: rest };
+    text = encode(body);
+    photoLeftOut = true;
+  }
+  const packed = text.startsWith(PACK_PREFIX);
+  return {
+    text,
+    packed,
+    chars: text.length,
+    summary: summarize(body, exportedAt),
+    photoLeftOut,
+    tooLong: text.length > WHATSAPP_SAFE_CHARS,
+  };
 }
 
 // ---- import: read and check ----
@@ -153,7 +188,8 @@ export function parseImportText(input: string): ParsedImport {
     try {
       json = strFromU8(gunzipSync(fromBase64(trimmed.slice(PACK_PREFIX.length))));
     } catch {
-      throw new Error('That text is damaged, so it can\'t be read. Copy the export again from the old phone.');
+      // A packed copy that will not unpack is almost always one WhatsApp cut short.
+      throw new Error(CUT_OFF_MESSAGE);
     }
   } else {
     const start = trimmed.indexOf('{');
@@ -168,7 +204,7 @@ export function parseImportText(input: string): ParsedImport {
   try {
     file = JSON.parse(json);
   } catch {
-    throw new Error('The text is cut off or damaged, so it can\'t be read. Copy the whole export again.');
+    throw new Error(CUT_OFF_MESSAGE);
   }
 
   if (!file || typeof file !== 'object' || file.format !== EXPORT_FORMAT) {
@@ -205,7 +241,7 @@ export function parseImportText(input: string): ParsedImport {
 
   const data: Record<string, unknown> = {};
   Object.keys(src).forEach(k => {
-    if (k === SAFETY_KEY || k === BACKUP_KEY || !KEY_PATTERN.test(k)) return;
+    if (NOT_DATA_KEYS.includes(k) || !KEY_PATTERN.test(k)) return;
     if (src[k] === undefined) return;
     data[k] = src[k];
   });
@@ -216,7 +252,7 @@ export function parseImportText(input: string): ParsedImport {
 // ---- import: apply, undo ----
 
 const writeSnapshot = async (entries: RawSnapshot): Promise<void> => {
-  const keep = [SAFETY_KEY, BACKUP_KEY];
+  const keep = NOT_DATA_KEYS;
   const existing = (await AsyncStorage.getAllKeys()).filter(k => !keep.includes(k));
   if (existing.length) await AsyncStorage.multiRemove(existing);
   const pairs: [string, string][] = Object.keys(entries)
@@ -255,9 +291,16 @@ export async function readSafetyInfo(): Promise<SafetyInfo | null> {
   }
 }
 
+/** Saves what is on the device now under `key`, in the same shape Undo reads. Throws if it cannot be saved. */
+export async function keepSafetyCopy(key: string): Promise<void> {
+  const current = await readRaw(NOT_DATA_KEYS);
+  const copy = JSON.stringify({ savedAt: new Date().toISOString(), appVersion: APP_VERSION, snapshot: current });
+  await AsyncStorage.setItem(key, copy);
+}
+
 export async function applyImport(data: Record<string, unknown>): Promise<void> {
   // 1. Safety copy of what is here now. If it cannot be saved, nothing is replaced.
-  const current = await readRaw([SAFETY_KEY]);
+  const current = await readRaw([SAFETY_KEY, BACKFILL_SAFETY_KEY]);
   const safety = JSON.stringify({ savedAt: new Date().toISOString(), appVersion: APP_VERSION, snapshot: current });
   const saved = await AsyncStorage.setItem(SAFETY_KEY, safety).then(() => true, () => false);
   if (!saved) throw new Error('Couldn\'t save a safety copy of your current data, so nothing was replaced.');
